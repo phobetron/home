@@ -1,0 +1,7 @@
+.config/AWSVPNClient
+.config/coc
+.config/configstore
+.config/iTerm2
+.config/nvim/autoload
+.config/nvim/plugin
+.config/yarn

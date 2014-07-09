@@ -1,0 +1,21 @@
+[core]
+  editor = /usr/bin/vim
+  excludesfile = ~/.gitignore_global
+[color]
+  ui = auto
+  branch = auto
+  diff = auto
+  interactive = auto
+  status = auto
+[user]
+  name = Charles Hudson
+  email = charles.hudson@traderepublic.com
+[filter "media"]
+  required = true
+  clean = git media clean %f
+  smudge = git media smudge %f
+[push]
+	default = current
+[branch]
+  autosetupmerge = always
+  autosetuprebase = always

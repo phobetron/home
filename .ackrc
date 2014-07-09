@@ -1,0 +1,42 @@
+#ack is a tool like grep, designed for programmers with large trees of heterogeneous source code
+
+#to install ack, see http://betterthangrep.com/
+#to use ack, launch terminal (mac osx) and type 'ack <some_keywords>'
+#ack will search all files in the current directory & sub-directories
+
+#here's how I have my config file setup. this file is located on mac osx here
+# ~/.ackrc
+
+# Always color, even if piping to a another program
+--color
+
+# Use less as my pager
+--pager=less -iqRS
+
+--noignore-dir=.buildkite
+--noignore-dir=.circleci
+
+--ignore-dir=.idea
+--ignore-dir=.sass-cache
+--ignore-dir=.tmp
+--ignore-dir=tmp
+--ignore-dir=log
+--ignore-dir=coverage
+--ignore-dir=dist
+--ignore-dir=public/assets
+--ignore-dir=public/packs-test
+--ignore-dir=match:/node_modules/
+
+#make sure ack knows how to search common filetypes used in rails projects
+--type-set=coffee=.coffee
+--type-set=coffeescript=.coffee
+--type-add=css=.scss,.sass
+--type-add=ruby=.slim,.haml,.rselm,.feature,.ru,.lock
+
+#make sure ack knows how to search common filetypes used in node.js projects
+--type-set=coffee=.coffee
+--type-set=feature=.feature
+--type-set=jade=.jade
+--type-set=json=.json
+--type-set=pug=.pug
+--type-set=vue=.vue

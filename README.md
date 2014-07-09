@@ -1,4 +1,3 @@
-vimrc
+User Home Files
 =====
-
-My Vim configuration
+For `/home/user` or `Users/user`

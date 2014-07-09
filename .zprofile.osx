@@ -1,0 +1,19 @@
+export EDITOR=nvim
+alias vim=$EDITOR
+alias vi=vim
+alias ls="ls -hAlFG"
+
+export PATH="/usr/local/bin:/usr/local/sbin:/usr/local/opt/python/libexec/bin:$HOME/.rbenv/bin:$HOME/Projects/traderepublic/infrastructure/bin:$PATH"
+export PATH="$HOME/.yarn/bin:$HOME/.config/yarn/global/node_modules/.bin:$PATH"
+
+eval "$(rbenv init -)"
+
+# export NODE_OPTIONS=--openssl-legacy-provider
+
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
+[ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
+
+source ~/.secrets
+
+alias awsl="trctl -p corp aws ecr get-login-password | docker login --username AWS --password-stdin https://758156248519.dkr.ecr.eu-central-1.amazonaws.com"

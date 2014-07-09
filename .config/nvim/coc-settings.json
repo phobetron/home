@@ -1,0 +1,23 @@
+{
+  "coc.preferences.formatOnSaveFiletypes": [
+    "css",
+    "json",
+    "markdown",
+    "javascript",
+    "javascriptreact",
+    "typescript",
+    "typescriptreact",
+    "vue"
+  ],
+  "diagnostic.checkCurrentLine": true,
+  "diagnostic.displayByAle": false,
+  "diagnostic.enableMessage": "jump",
+  "diagnostic.level": "information",
+  "diagnostic.messageTarget": "echo",
+  "explorer.icon.enableNerdfont": true,
+  "highlight.colorNames.enable": false,
+  "prettier.disableLanguages": [],
+  "stylelintplus.autoFixOnFormat": true,
+  "stylelintplus.autoFixOnSave": true,
+  "volar.formatting.enable": false
+}
