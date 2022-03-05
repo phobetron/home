@@ -6,7 +6,7 @@ require('packer').startup(function()
   use 'mileszs/ack.vim'                                      -- Ack
   use 'nvim-lua/plenary.nvim'                                -- LUA Dependencies
   use 'kyazdani42/nvim-web-devicons'                         -- Icons
-  use 'hoob3rt/lualine.nvim'                                 -- Status line
+  use 'nvim-lualine/lualine.nvim'                            -- Status line
   use 'nvim-lua/popup.nvim'                                  -- Popup manager
   use 'nvim-telescope/telescope.nvim'                        -- Fuzzy finder
   use 'pwntester/octo.nvim'                                  -- GitHub integration
@@ -53,7 +53,14 @@ vim.g.ackprg = 'ag --vimgrep'
 require('nvim-web-devicons').setup({ default = true })
 
 require('lualine').setup({
-  options = { theme = 'iceberg_dark' }
+  options = { theme = 'iceberg_dark' },
+  sections = {
+    -- 0: Just the filename; 1: Relative path; 2: Absolute path
+    lualine_c = {{ 'filename', path = 1 }}
+  },
+  inactive_sections = {
+    lualine_c = {{ 'filename', path = 1 }}
+  }
 })
 
 -- Telescope
@@ -63,7 +70,7 @@ require('telescope').setup({
       additional_args = function(opts)
         return {"--hidden"}
       end
-    },
+    }
   }
 })
 
