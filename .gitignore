@@ -2,6 +2,7 @@
 .config/coc
 .config/configstore
 .config/iTerm2
+.config/kitty
 .config/nvim/autoload
 .config/nvim/plugin
 .config/yarn
