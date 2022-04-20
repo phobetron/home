@@ -13,6 +13,7 @@
   "diagnostic.enableMessage": "jump",
   "diagnostic.level": "information",
   "diagnostic.messageTarget": "echo",
+  "eslint.autoFixOnSave": true,
   "explorer.icon.enableNerdfont": true,
   "explorer.width": 40,
   "explorer.contentWidth": 50,
