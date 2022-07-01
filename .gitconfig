@@ -9,13 +9,15 @@
   status = auto
 [user]
   name = Charles Hudson
-  email = charles.hudson@traderepublic.com
+  email = charles@bunch.capital
 [filter "media"]
   required = true
   clean = git media clean %f
   smudge = git media smudge %f
 [push]
-	default = current
+  default = current
 [branch]
   autosetupmerge = always
   autosetuprebase = always
+[pull]
+	rebase = false
