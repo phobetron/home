@@ -82,6 +82,7 @@ PROMPT_COMMAND=prompt_func
 precmd() { eval "$PROMPT_COMMAND" }
 
 # zplug - manage plugins
+[ -s "/opt/homebrew/opt/zplug/init.zsh" ] && \. "/opt/homebrew/opt/zplug/init.zsh"
 [ -s "/usr/local/opt/zplug/init.zsh" ] && \. "/usr/local/opt/zplug/init.zsh"
 [ -s "/usr/share/zplug/init.zsh" ] && \. "/usr/share/zplug/init.zsh"
 zplug "plugins/git", from:oh-my-zsh
@@ -121,5 +122,3 @@ alias dcd="docker-compose down --remove-orphans"
 alias dcr="docker-compose run --rm"
 alias dcl="docker-compose logs"
 alias dcps="docker-compose ps"
-
-export PATH="$HOME/.yarn/bin:$HOME/.config/yarn/global/node_modules/.bin:$PATH"
