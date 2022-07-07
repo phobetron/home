@@ -1,5 +1,4 @@
 [core]
-  editor = /usr/bin/vim
   excludesfile = ~/.gitignore_global
 [color]
   ui = auto
@@ -20,4 +19,4 @@
   autosetupmerge = always
   autosetuprebase = always
 [pull]
-	rebase = false
+  rebase = false
