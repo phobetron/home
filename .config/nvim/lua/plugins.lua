@@ -1,16 +1,16 @@
 require('packer').startup(function()
   -- use {'nvim-treesitter/nvim-treesitter', run = ':TSUpdate'} -- TreeSitter
-  use 'cocopon/iceberg.vim'                                  -- Color scheme
-  use 'cakebaker/scss-syntax.vim'                            -- SCSS syntax
-  use 'posva/vim-vue'                                        -- Vue syntax
-  use 'mileszs/ack.vim'                                      -- Ack
-  use 'nvim-lua/plenary.nvim'                                -- LUA Dependencies
-  use 'kyazdani42/nvim-web-devicons'                         -- Icons
-  use 'nvim-lualine/lualine.nvim'                            -- Status line
-  use 'nvim-lua/popup.nvim'                                  -- Popup manager
-  use 'nvim-telescope/telescope.nvim'                        -- Fuzzy finder
-  use 'pwntester/octo.nvim'                                  -- GitHub integration
-  use {'neoclide/coc.nvim', branch = 'release'}              -- Conqueror of Completion
+  use 'cocopon/iceberg.vim'           -- Color scheme
+  use 'cakebaker/scss-syntax.vim'     -- SCSS syntax
+  use 'posva/vim-vue'                 -- Vue syntax
+  use 'mileszs/ack.vim'               -- Ack
+  use 'nvim-lua/plenary.nvim'         -- LUA Dependencies
+  use 'kyazdani42/nvim-web-devicons'  -- Icons
+  use 'nvim-lualine/lualine.nvim'     -- Status line
+  use 'nvim-lua/popup.nvim'           -- Popup manager
+  use 'nvim-telescope/telescope.nvim' -- Fuzzy finder
+  use 'pwntester/octo.nvim'           -- GitHub integration
+  use {'neoclide/coc.nvim'}           -- Conqueror of Completion
   end
 )
 
