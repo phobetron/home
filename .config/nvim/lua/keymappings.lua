@@ -8,6 +8,7 @@ local noeopts = { noremap = true, expr = true }
 
 -- Clear search terms (Ctrl+/)
 vim.keymap.set('', '<C-_>', ':let @/ = ""<CR>', nosopts)
+vim.keymap.set('', '<C-/>', ':let @/ = ""<CR>', nosopts)
 
 -- Nudge lines up and down
 vim.keymap.set('n', '<A-j>', ':m .+1<CR>==', noopts)
