@@ -88,12 +88,8 @@ local servers = {
 -- Use an on_attach function to only map the following keys
 -- after the language server attaches to the current buffer
 local on_attach = function(client, bufnr)
-  -- Enable completion triggered by <c-x><c-o>
-  vim.api.nvim_buf_set_option(bufnr, 'omnifunc', 'v:lua.vim.lsp.omnifunc')
-
-  -- Mappings.
-  -- See `:help vim.lsp.*` for documentation on any of the below functions
   local bufopts = { noremap=true, silent=true, buffer=bufnr }
+
   vim.keymap.set('n', 'gD', vim.lsp.buf.declaration, bufopts)
   vim.keymap.set('n', 'gd', vim.lsp.buf.definition, bufopts)
   vim.keymap.set('n', 'gi', vim.lsp.buf.implementation, bufopts)
@@ -103,7 +99,30 @@ local on_attach = function(client, bufnr)
   vim.keymap.set('n', '<leader>d', vim.lsp.buf.type_definition, bufopts)
   vim.keymap.set('n', '<leader>r', vim.lsp.buf.rename, bufopts)
   vim.keymap.set('n', '<leader>a', vim.lsp.buf.code_action, bufopts)
-  vim.keymap.set('n', '<leader>f', vim.lsp.buf.formatting, bufopts)
+end
+
+local augroup = vim.api.nvim_create_augroup('LspFormatting', {})
+local on_attach_format = function(client, bufnr)
+  on_attach(client, bufnr)
+
+  local bufopts = { noremap=true, silent=true, buffer=bufnr }
+
+  vim.keymap.set('n', '<leader>f', function()
+    local params = vim.lsp.util.make_formatting_params({})
+    client.request('textDocument/formatting', params, nil, bufnr)
+  end, bufopts)
+
+  if client.supports_method('textDocument/formatting') then
+    vim.api.nvim_clear_autocmds({ group = augroup, buffer = bufnr })
+    vim.api.nvim_create_autocmd('BufWritePre', {
+      group = augroup,
+      buffer = bufnr,
+      callback = function()
+        -- on -1.8, you should use vim.lsp.buf.format({ bufnr = bufnr }) instead
+        vim.lsp.buf.formatting_seq_sync(nil, 5000, { 'null-ls' })
+      end,
+    })
+  end
 end
 
 for _, server in pairs(servers) do
@@ -124,31 +143,18 @@ require('lspconfig').sumneko_lua.setup({
 })
 
 -- null-ls
-local augroup = vim.api.nvim_create_augroup("LspFormatting", {})
-require("null-ls").setup({
+require('null-ls').setup({
   sources = {
-    require("null-ls").builtins.diagnostics.markdownlint,
-    require("null-ls").builtins.diagnostics.stylelint,
-    require("null-ls").builtins.diagnostics.yamllint,
-    require("null-ls").builtins.diagnostics.zsh,
-    require("null-ls").builtins.formatting.eslint_d,
-    require("null-ls").builtins.formatting.crystal_format,
-    require("null-ls").builtins.formatting.rubocop,
-    require("null-ls").builtins.formatting.sql_formatter,
+    require('null-ls').builtins.diagnostics.markdownlint,
+    require('null-ls').builtins.diagnostics.stylelint,
+    require('null-ls').builtins.diagnostics.yamllint,
+    require('null-ls').builtins.diagnostics.zsh,
+    require('null-ls').builtins.formatting.eslint_d,
+    require('null-ls').builtins.formatting.crystal_format,
+    require('null-ls').builtins.formatting.rubocop,
+    require('null-ls').builtins.formatting.sql_formatter,
   },
-  on_attach = function(client, bufnr)
-    if client.supports_method("textDocument/formatting") then
-      vim.api.nvim_clear_autocmds({ group = augroup, buffer = bufnr })
-      vim.api.nvim_create_autocmd("BufWritePre", {
-        group = augroup,
-        buffer = bufnr,
-        callback = function()
-          -- on 0.8, you should use vim.lsp.buf.format({ bufnr = bufnr, timeout_ms = 5000 }) instead
-          vim.lsp.buf.formatting_sync(nil, 5000)
-        end,
-      })
-    end
-  end,
+  on_attach = on_attach_format,
 })
 
 -- TreeSitter
@@ -197,19 +203,45 @@ require'window-picker'.setup({
 
 -- neo-tree
 require('neo-tree').setup({
+  default_component_configs = {
+    modified = {
+      symbol = '◈',
+    },
+    git_status = {
+      symbols = {
+        -- Change type
+        added     = '✚',
+        modified  = '◆',
+        deleted   = '✖',
+        renamed   = '',
+        -- Status type
+        untracked = '',
+        ignored   = '◫',
+        unstaged  = '◧',
+        staged    = '◨',
+        conflict  = '',
+      },
+    },
+  },
   window = {
     mappings = {
-      ["<2-LeftMouse>"] = "open_with_window_picker",
+      ['<2-LeftMouse>'] = 'open_with_window_picker',
       ['<cr>'] = 'open_with_window_picker',
-    }
+    },
+  },
+  filesystem = {
+    filtered_items = {
+      visible = true,
+      hide_dotfiles = false,
+    },
   },
   buffers = {
     window = {
       mappings = {
         ['d'] = 'buffer_delete',
-      }
-    }
-  }
+      },
+    },
+  },
 })
 
 -- Ack
@@ -234,7 +266,7 @@ require('telescope').setup({
   pickers = {
     live_grep = {
       additional_args = function(opts)
-        return {"--hidden"}
+        return {'--hidden'}
       end
     }
   }
