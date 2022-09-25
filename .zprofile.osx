@@ -1,4 +1,4 @@
-export EDITOR=/opt/homebrew/bin/nvim
+export EDITOR=$(which nvim)
 export VISUAL=$EDITOR
 alias vim=$EDITOR
 alias vi=vim

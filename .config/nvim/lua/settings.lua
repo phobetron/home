@@ -57,4 +57,6 @@ vim.opt.hlsearch     = true                                        -- Highlight 
 vim.opt.incsearch    = true                                        -- Search incrementally as typed
 vim.opt.smartcase    = true                                        -- Sensitive when there's a capital letter
 vim.opt.gdefault     = true                                        -- Default to global search (/g)
+vim.opt.winfixwidth  = true
+vim.opt.signcolumn   = 'yes'
 vim.opt.fillchars:append('vert:╽')                                 -- Set fillchars
