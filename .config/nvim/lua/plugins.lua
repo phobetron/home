@@ -21,8 +21,13 @@ require('packer').startup(function(use)
     'williamboman/mason.nvim',                               -- Automated LSP installation
     'williamboman/mason-lspconfig.nvim',                     -- Mason/LSP config bridge
   }
-  end
-)
+  use 'L3MON4D3/LuaSnip'                                     -- Snippets plugin
+  use {
+    'hrsh7th/nvim-cmp',                                      -- Autocompletion plugin
+    'hrsh7th/cmp-nvim-lsp',                                  -- LSP source for nvim-cmp
+    'saadparwaiz1/cmp_luasnip',                              -- Snippets source for nvim-cmp
+  }
+end)
 
 -- GUI Settings
 if (vim.api.nvim_eval("exists('+guioptions')")) then
@@ -63,27 +68,49 @@ require('mason').setup()
 require('mason-lspconfig').setup()
 
 -- LSP
-local servers = {
-  'bashls',
-  'crystalline',
-  'cssmodules_ls',
-  'dockerls',
-  'elixirls',
-  'eslint',
-  'graphql',
-  'html',
-  'jsonls',
-  'lemminx',
-  'marksman',
-  'pyright',
-  'solargraph',
-  'sqls',
-  'sumneko_lua',
-  'svelte',
-  'tsserver',
-  'volar',
-  'yamlls',
-}
+-- luasnip
+local luasnip = require('luasnip')
+
+-- nvim-cmp
+local cmp = require('cmp')
+cmp.setup({
+  snippet = {
+    expand = function(args)
+      luasnip.lsp_expand(args.body)
+    end,
+  },
+  mapping = cmp.mapping.preset.insert({
+    ['<C-b>'] = cmp.mapping.scroll_docs(-4),
+    ['<C-f>'] = cmp.mapping.scroll_docs(4),
+    ['<C-Space>'] = cmp.mapping.complete(),
+    ['<CR>'] = cmp.mapping.confirm {
+      behavior = cmp.ConfirmBehavior.Replace,
+      select = true,
+    },
+    ['<Tab>'] = cmp.mapping(function(fallback)
+      if cmp.visible() then
+        cmp.select_next_item()
+      elseif luasnip.expand_or_jumpable() then
+        luasnip.expand_or_jump()
+      else
+        fallback()
+      end
+    end, { 'i', 's' }),
+    ['<S-Tab>'] = cmp.mapping(function(fallback)
+      if cmp.visible() then
+        cmp.select_prev_item()
+      elseif luasnip.jumpable(-1) then
+        luasnip.jump(-1)
+      else
+        fallback()
+      end
+    end, { 'i', 's' }),
+  }),
+  sources = {
+    { name = 'nvim_lsp' },
+    { name = 'luasnip' },
+  },
+})
 
 -- Use an on_attach function to only map the following keys
 -- after the language server attaches to the current buffer
@@ -125,9 +152,35 @@ local on_attach_format = function(client, bufnr)
   end
 end
 
+local capabilities = vim.lsp.protocol.make_client_capabilities()
+capabilities = require('cmp_nvim_lsp').update_capabilities(capabilities)
+
+local servers = {
+  'bashls',
+  'crystalline',
+  'cssmodules_ls',
+  'dockerls',
+  'elixirls',
+  'eslint_d',
+  'graphql',
+  'html',
+  'jsonls',
+  'lemminx',
+  'marksman',
+  'pyright',
+  'solargraph',
+  'sqls',
+  'sumneko_lua',
+  'svelte',
+  'tsserver',
+  'volar',
+  'yamlls',
+}
+
 for _, server in pairs(servers) do
   require('lspconfig')[server].setup({
-    on_attach = on_attach
+    on_attach = on_attach,
+    capabilities = capabilities,
   })
 end
 
