@@ -161,7 +161,7 @@ local servers = {
   'cssmodules_ls',
   'dockerls',
   'elixirls',
-  'eslint_d',
+  'eslint',
   'graphql',
   'html',
   'jsonls',
