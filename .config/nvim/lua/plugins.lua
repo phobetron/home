@@ -249,6 +249,7 @@ require('nvim-treesitter.configs').setup {
 -- window-picker
 require'window-picker'.setup({
   include_current_win = true,
+  selection_chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ',
   fg_color = '#ffffff',
   current_win_hl_color = '#1593e5',
   other_win_hl_color = '#1593e5',
