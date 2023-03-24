@@ -204,8 +204,10 @@ require('null-ls').setup({
     require('null-ls').builtins.diagnostics.zsh,
     require('null-ls').builtins.formatting.eslint_d,
     require('null-ls').builtins.formatting.crystal_format,
+    require('null-ls').builtins.formatting.prettier,
     require('null-ls').builtins.formatting.rubocop,
     require('null-ls').builtins.formatting.sql_formatter,
+    require('null-ls').builtins.formatting.yamlfmt,
   },
   on_attach = on_attach_format,
 })
