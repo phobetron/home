@@ -195,6 +195,15 @@ require('lspconfig').sumneko_lua.setup({
   },
 })
 
+require('lspconfig').yamlls.setup({
+  on_attach = on_attach,
+  settings = {
+    yaml = {
+      keyOrdering = false
+    }
+  },
+})
+
 -- null-ls
 require('null-ls').setup({
   sources = {
@@ -209,9 +218,6 @@ require('null-ls').setup({
     require('null-ls').builtins.formatting.prettier,
     require('null-ls').builtins.formatting.rubocop,
     require('null-ls').builtins.formatting.sql_formatter,
-    require('null-ls').builtins.formatting.yamlfmt.with({
-        temp_dir = '/tmp/null-ls',
-    }),
   },
   on_attach = on_attach_format,
 })
