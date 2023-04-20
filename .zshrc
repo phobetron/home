@@ -5,7 +5,7 @@ ulimit -n 1024
 bindkey -v
 
 # History settings
-setopt histignorealldups sharehistory
+setopt histignorealldups
 
 # Keep 5000 lines of history within the shell and save it to ~/.zsh_history:
 HISTSIZE=5000
