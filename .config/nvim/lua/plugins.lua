@@ -145,8 +145,7 @@ local on_attach_format = function(client, bufnr)
       group = augroup,
       buffer = bufnr,
       callback = function()
-        -- on -1.8, you should use vim.lsp.buf.format({ bufnr = bufnr }) instead
-        vim.lsp.buf.formatting_seq_sync(nil, 5000, { 'null-ls' })
+        vim.lsp.buf.format({ 'null-ls' })
       end,
     })
   end
@@ -210,12 +209,16 @@ require('null-ls').setup({
     require('null-ls').builtins.diagnostics.markdownlint,
     require('null-ls').builtins.diagnostics.stylelint,
     require('null-ls').builtins.diagnostics.yamllint.with({
-        temp_dir = '/tmp/null-ls',
+      temp_dir = '/tmp/null-ls',
     }),
     require('null-ls').builtins.diagnostics.zsh,
-    require('null-ls').builtins.formatting.eslint_d,
+    require('null-ls').builtins.formatting.eslint_d.with({
+      extra_filetypes = { 'svelte' },
+    }),
     require('null-ls').builtins.formatting.crystal_format,
-    require('null-ls').builtins.formatting.prettier,
+    require('null-ls').builtins.formatting.prettier.with({
+      extra_filetypes = { 'svelte' },
+    }),
     require('null-ls').builtins.formatting.rubocop,
     require('null-ls').builtins.formatting.sql_formatter,
   },
