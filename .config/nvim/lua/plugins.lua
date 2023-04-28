@@ -153,7 +153,7 @@ local on_attach_format = function(client, bufnr)
 end
 
 local capabilities = vim.lsp.protocol.make_client_capabilities()
-capabilities = require('cmp_nvim_lsp').update_capabilities(capabilities)
+capabilities = require('cmp_nvim_lsp').default_capabilities(capabilities)
 
 local servers = {
   'bashls',
@@ -169,8 +169,8 @@ local servers = {
   'marksman',
   'pyright',
   'solargraph',
-  'sqls',
-  'sumneko_lua',
+  'sqlls',
+  'lua_ls',
   'svelte',
   'tsserver',
   'volar',
@@ -184,7 +184,7 @@ for _, server in pairs(servers) do
   })
 end
 
-require('lspconfig').sumneko_lua.setup({
+require('lspconfig').lua_ls.setup({
   on_attach = on_attach,
   settings = {
     Lua = {
