@@ -8,6 +8,5 @@ if (vim.api.nvim_eval("exists('+termguicolors')")) then
   ]])
 end
 
-vim.cmd('syntax on')
 vim.cmd('filetype plugin indent on')
 vim.cmd('colorscheme iceberg')

@@ -169,6 +169,7 @@ local servers = {
   'pyright',
   'solargraph',
   'sqlls',
+  'stylelint_lsp',
   'lua_ls',
   'svelte',
   'tsserver',
@@ -183,6 +184,16 @@ for _, server in pairs(servers) do
   })
 end
 
+require('lspconfig').eslint.setup({
+  on_attach = function(client, bufnr)
+    on_attach(client, bufnr)
+    vim.api.nvim_create_autocmd("BufWritePre", {
+      buffer = bufnr,
+      command = "EslintFixAll",
+    })
+  end
+})
+
 require('lspconfig').lua_ls.setup({
   on_attach = on_attach,
   settings = {
@@ -190,6 +201,17 @@ require('lspconfig').lua_ls.setup({
       diagnostics = {
         globals = {'vim'},
       },
+    },
+  },
+})
+
+require('lspconfig').stylelint_lsp.setup({
+  on_attach = on_attach,
+  filetypes = { 'html', 'css', 'less', 'scss', 'svelte' },
+  settings = {
+    stylelintplus = {
+      autoFixOnformat = true,
+      autoFixOnSave = true,
     },
   },
 })
@@ -205,16 +227,13 @@ require('lspconfig').yamlls.setup({
 
 -- null-ls
 require('null-ls').setup({
+  debug = true,
   sources = {
     require('null-ls').builtins.diagnostics.markdownlint,
-    require('null-ls').builtins.diagnostics.stylelint,
     require('null-ls').builtins.diagnostics.yamllint.with({
       temp_dir = '/tmp/null-ls',
     }),
     require('null-ls').builtins.diagnostics.zsh,
-    require('null-ls').builtins.formatting.eslint_d.with({
-      extra_filetypes = { 'svelte' },
-    }),
     require('null-ls').builtins.formatting.crystal_format,
     require('null-ls').builtins.formatting.prettier.with({
       extra_filetypes = { 'svelte' },
