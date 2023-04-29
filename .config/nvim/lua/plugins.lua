@@ -206,8 +206,50 @@ require('lspconfig').lua_ls.setup({
 })
 
 require('lspconfig').stylelint_lsp.setup({
-  on_attach = on_attach,
+  on_attach = function(client, bufnr)
+    on_attach(client, bufnr)
+    vim.api.nvim_create_autocmd("BufWritePre", {
+      buffer = bufnr,
+      command = "StylelintFixAll",
+    })
+  end,
   filetypes = { 'html', 'css', 'less', 'scss', 'svelte' },
+  commands = {
+    StylelintFixAll = {
+      function()
+        local util = require 'lspconfig.util'
+        local opts = { sync = true, bufnr = 0 }
+
+        local stylelint_lsp_client = util.get_active_client_by_name(opts.bufnr, 'stylelint_lsp')
+        if stylelint_lsp_client == nil then
+          return
+        end
+
+        local request
+        if opts.sync then
+          request = function(bufnr, method, params)
+            stylelint_lsp_client.request_sync(method, params, nil, bufnr)
+          end
+        else
+          request = function(bufnr, method, params)
+            stylelint_lsp_client.request(method, params, nil, bufnr)
+          end
+        end
+
+        local bufnr = util.validate_bufnr(opts.bufnr or 0)
+        request(bufnr, 'workspace/executeCommand', {
+          command = 'stylelint.applyAutoFixes',
+          arguments = {
+            {
+              uri = vim.uri_from_bufnr(bufnr),
+              version = vim.lsp.util.buf_versions[bufnr],
+            },
+          },
+        })
+      end,
+      description = 'Fix all stylelint problems for this buffer',
+    },
+  },
   settings = {
     stylelintplus = {
       autoFixOnformat = true,
