@@ -235,9 +235,6 @@ require('null-ls').setup({
     }),
     require('null-ls').builtins.diagnostics.zsh,
     require('null-ls').builtins.formatting.crystal_format,
-    require('null-ls').builtins.formatting.prettier.with({
-      extra_filetypes = { 'svelte' },
-    }),
     require('null-ls').builtins.formatting.rubocop,
     require('null-ls').builtins.formatting.sql_formatter,
   },
