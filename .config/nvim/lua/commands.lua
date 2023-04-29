@@ -6,6 +6,7 @@ vim.cmd([[
 
   au BufWritePre * :retab                                                      " Convert tabs to spaces on save
   au BufWritePre * :%s/\s\+$//e                                                " Remove trailing whitespace on save
+  au BufWritePre <buffer> lua vim.lsp.buf.format()
 
   augroup cline                                                                " Only show cursorline in the current window and in normal mode.
     au!
