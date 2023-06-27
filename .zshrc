@@ -113,6 +113,7 @@ alias dcleanc="docker rm -v \$(docker ps -a -f status=exited -q)"
 alias dcleani="docker rmi \$(docker images -a -f dangling=true -q)"
 alias dcleanv="docker volume rm \$(docker volume ls -f dangling=true -f name=\"[0-9a-f]{64}\" -q)"
 alias dclean="dcleanc; dcleani; dcleanv"
+alias dnuke="docker system prune -a --volumes --filter \"until=24h\""
 
 # Aliases for docker-compose
 alias dc="docker-compose"
