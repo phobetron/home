@@ -107,6 +107,7 @@ alias grep="grep --color=auto"
 
 # Aliases for GitHub
 alias gitnuke="git checkout develop; git branch | egrep -v \"(^\*|main|master|staging|develop)\" | xargs git branch -D"
+alias gitlog="git log --pretty=format:"%h,%x09%an,%x09%s""
 
 # Aliases for Docker
 alias dcleanc="docker rm -v \$(docker ps -a -f status=exited -q)"
