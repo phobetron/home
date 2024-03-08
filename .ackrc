@@ -17,6 +17,7 @@
 --noignore-dir=.circleci
 
 --ignore-dir=.idea
+--ignore-dir=.yarn
 --ignore-dir=.sass-cache
 --ignore-dir=.tmp
 --ignore-dir=tmp

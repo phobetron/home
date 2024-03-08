@@ -7,6 +7,9 @@ bindkey -v
 # History settings
 setopt histignorealldups
 
+# Print non-zero exit values
+setopt print_exit_value
+
 # Keep 5000 lines of history within the shell and save it to ~/.zsh_history:
 HISTSIZE=5000
 SAVEHIST=5000
@@ -114,7 +117,8 @@ alias dcleanc="docker rm -v \$(docker ps -a -f status=exited -q)"
 alias dcleani="docker rmi \$(docker images -a -f dangling=true -q)"
 alias dcleanv="docker volume rm \$(docker volume ls -f dangling=true -f name=\"[0-9a-f]{64}\" -q)"
 alias dclean="dcleanc; dcleani; dcleanv"
-alias dnuke="docker system prune -a --volumes --filter \"until=24h\""
+alias dnuke="docker system prune -a --volumes"
+# alias dnuke="docker system prune -a --filter \"until=24h\""
 
 # Aliases for docker-compose
 alias dc="docker-compose"
