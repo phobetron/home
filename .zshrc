@@ -86,9 +86,11 @@ PROMPT_COMMAND=prompt_func
 precmd() { eval "$PROMPT_COMMAND" }
 
 # zplug - manage plugins
-[ -s "/opt/homebrew/opt/zplug/init.zsh" ] && \. "/opt/homebrew/opt/zplug/init.zsh"
-[ -s "/usr/local/opt/zplug/init.zsh" ] && \. "/usr/local/opt/zplug/init.zsh"
-[ -s "/usr/share/zplug/init.zsh" ] && \. "/usr/share/zplug/init.zsh"
+source ~/.zplug/init.zsh
+# [ -s "/opt/homebrew/opt/zplug/init.zsh" ] && \. "/opt/homebrew/opt/zplug/init.zsh"
+# [ -s "/usr/local/opt/zplug/init.zsh" ] && \. "/usr/local/opt/zplug/init.zsh"
+# [ -s "/usr/share/zplug/init.zsh" ] && \. "/usr/share/zplug/init.zsh"
+# [ -s "~/.zplug/init.zsh" ] && \. "~/.zplug/init.zsh"
 zplug "plugins/git", from:oh-my-zsh
 zplug "plugins/sudo", from:oh-my-zsh
 zplug "plugins/command-not-found", from:oh-my-zsh
