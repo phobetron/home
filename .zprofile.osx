@@ -1,5 +1,6 @@
-export PATH="/opt/homebrew/opt/curl/bin:/opt/homebrew/bin:/usr/local/bin:/usr/local/sbin:/usr/local/opt/python/libexec/bin:$HOME/.rbenv/bin:$HOME/.local/bin:$PATH"
-export PATH="$HOME/.yarn/bin:$HOME/.config/yarn/global/node_modules/.bin:$PATH"
+export PATH="/opt/homebrew/opt/curl/bin:/opt/homebrew/bin:$PATH"
+export PATH="/usr/local/bin:/usr/local/sbin:$PATH"
+export PATH="/usr/local/opt/python/libexec/bin:$PATH"
 
 export EDITOR=$(which nvim)
 export VISUAL=$EDITOR
@@ -7,7 +8,16 @@ alias vim=$EDITOR
 alias vi=vim
 alias ls="ls -hAlFG"
 
+export PATH="$HOME/.rbenv/bin:$HOME/.local/bin:$PATH"
 eval "$(rbenv init -)"
+
+export PNPM_HOME="$HOME/Library/pnpm"
+export PATH="$PNPM_HOME:$PATH"
+
+export PATH="$HOME/.yarn/bin:$HOME/.config/yarn/global/node_modules/.bin:$PATH"
+
+export PATH="$HOME/.cache/rebar3/bin:$PATH"
+export PATH="$HOME/.juliaup/bin:$PATH"
 
 export NVM_DIR="$HOME/.nvm"
 [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
