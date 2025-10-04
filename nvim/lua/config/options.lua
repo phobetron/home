@@ -3,3 +3,11 @@
 -- Add any additional options here
 
 vim.opt.relativenumber = false -- No relative line numbers
+
+vim.diagnostic.config({
+  float = {
+    border = "single",
+    header = "",
+    source = true,
+  },
+})

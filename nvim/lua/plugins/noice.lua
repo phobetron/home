@@ -8,6 +8,12 @@ return {
           col = "50%",
         },
       },
+      popupmenu = {
+        position = {
+          row = "50%",
+          col = "50%",
+        },
+      },
     },
   },
 }
