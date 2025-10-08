@@ -21,7 +21,6 @@ return {
           {
             "filetype",
             colored = true,
-            icon_only = true,
           },
           {
             "filename",
@@ -37,7 +36,6 @@ return {
           {
             "filetype",
             colored = false,
-            icon_only = true,
           },
           {
             "filename",
