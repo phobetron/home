@@ -13,6 +13,8 @@ return {
           end,
         },
       })
+
+      opts.diagnostics.virtual_text = false
     end,
   },
 }

@@ -14,6 +14,7 @@ return {
     opts = function(_, opts)
       opts.window.mappings["<2-LeftMouse>"] = "open_with_window_picker"
       opts.window.mappings["<cr>"] = "open_with_window_picker"
+      opts.window.mappings["P"].config.use_float = true
       opts.window.mappings["S"] = "split_with_window_picker"
       opts.window.mappings["s"] = "vsplit_with_window_picker"
     end,

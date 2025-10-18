@@ -14,3 +14,12 @@ vim.api.nvim_create_autocmd({ "BufNewFile", "BufRead" }, {
     vim.bo.filetype = "sh"
   end,
 })
+
+vim.api.nvim_create_autocmd("BufWritePre", { pattern = "*", command = "retab" }) -- Convert tabs to spaces on save
+vim.api.nvim_create_autocmd("BufWritePre", { pattern = "*", command = "%s/\\s\\+$//e" }) -- Remove trailing whitespace on save
+
+vim.api.nvim_create_augroup("cline", { clear = true }) -- Only show cursorline in the current window and in normal mode
+vim.api.nvim_create_autocmd("WinLeave", { group = "cline", pattern = "*", command = "set nocursorline" })
+vim.api.nvim_create_autocmd("WinEnter", { group = "cline", pattern = "*", command = "set cursorline" })
+vim.api.nvim_create_autocmd("InsertEnter", { group = "cline", pattern = "*", command = "set nocursorline" })
+vim.api.nvim_create_autocmd("InsertLeave", { group = "cline", pattern = "*", command = "set cursorline" })
