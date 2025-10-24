@@ -30,3 +30,5 @@ AbortController
 arg
 cursorline
 neo
+pm2
+configs
