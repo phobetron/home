@@ -4,7 +4,7 @@ return {
     lazy = false,
     opts = {
       enabled = true,
-      debounce_delay = 5000,
+      debounce_delay = 300000, -- Five minutes
     },
   },
 }
