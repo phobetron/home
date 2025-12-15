@@ -1,5 +1,9 @@
 return {
   "hedyhli/markdown-toc.nvim",
-  ft = "markdown", -- Lazy load on markdown filetype
-  cmd = { "Mtoc" }, -- Or, lazy load on "Mtoc" command
+  ft = "markdown",
+  opts = {
+    toc_list = {
+      markers = "-",
+    },
+  },
 }
