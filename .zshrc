@@ -164,3 +164,4 @@ alias dcd="docker-compose down --remove-orphans"
 alias dcr="docker-compose run --rm"
 alias dcl="docker-compose logs"
 alias dcps="docker-compose ps"
+export PATH=$PATH:$HOME/.maestro/bin

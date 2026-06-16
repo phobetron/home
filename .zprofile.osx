@@ -27,8 +27,10 @@ export ANDROID_HOME="/Users/charles.hudson/Library/Android/sdk"
 export ANDROID_SDK_ROOT="/Users/charles.hudson/Library/Android/sdk"
 export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$ANDROID_HOME/emulator:$PATH"
 
+export AWS_PROFILE=bedrock
 export CODEX_HOME="$HOME/.codex"
 
+export NVM_SYMLINK_CURRENT=true
 export NVM_DIR="$HOME/.nvm"
 [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
 [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
