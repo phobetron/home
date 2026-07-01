@@ -1,0 +1,271 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require "date"
+require "json"
+require "time"
+
+CODEX_ROOT = File.expand_path("~/.codex")
+TOKEN_FIELDS = %w[input_tokens cached_input_tokens output_tokens reasoning_output_tokens total_tokens].freeze
+MAX_JSONL_LINE_BYTES = 10 * 1024 * 1024
+
+started_at = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+
+def usage
+  warn "Usage: #{$PROGRAM_NAME} [YYYY-MM-DD]"
+end
+
+def parse_day(value)
+  value ? Date.iso8601(value) : Date.today - 1
+rescue Date::Error
+  usage
+  exit 2
+end
+
+def blank_usage
+  TOKEN_FIELDS.to_h { |field| [field, 0] }.merge("events" => 0)
+end
+
+def add_usage(total, usage)
+  total["events"] += 1
+  TOKEN_FIELDS.each { |field| total[field] += usage.fetch(field, 0).to_i }
+end
+
+def merge_usage(total, usage)
+  total["events"] += usage.fetch("events")
+  TOKEN_FIELDS.each { |field| total[field] += usage.fetch(field) }
+end
+
+def normalize_json_usage(fields)
+  TOKEN_FIELDS.to_h { |field| [field, fields.fetch(field, 0).to_i] }
+end
+
+def usage_delta(current, previous)
+  return current if previous.nil?
+  return current if current.fetch("total_tokens") < previous.fetch("total_tokens", 0)
+
+  TOKEN_FIELDS.to_h do |field|
+    [field, [current.fetch(field) - previous.fetch(field, 0), 0].max]
+  end
+end
+
+def event_usage(info, previous_total)
+  total = normalize_json_usage((info || {}).fetch("total_token_usage", {}))
+  last = normalize_json_usage((info || {}).fetch("last_token_usage", {}))
+  usage = previous_total == total ? normalize_json_usage({}) : last
+  usage = usage_delta(total, previous_total) unless positive_usage?(usage)
+  [total, usage]
+end
+
+def positive_usage?(usage)
+  usage.fetch("total_tokens", 0).positive? || TOKEN_FIELDS.any? { |field| usage.fetch(field, 0).positive? }
+end
+
+def local_date(timestamp)
+  Time.iso8601(timestamp).getlocal.to_date
+rescue ArgumentError, TypeError
+  nil
+end
+
+def comma(number)
+  number.to_s.reverse.gsub(/(\d{3})(?=\d)/, "\\1,").reverse
+end
+
+def human_duration(seconds)
+  return "#{(seconds * 1000).round}ms" if seconds < 1
+  return "#{seconds.round(1).to_s.sub(/\.0\z/, "")}s" if seconds < 60
+
+  minutes, seconds = seconds.round.divmod(60)
+  return "#{minutes}m #{seconds}s" if minutes < 60
+
+  hours, minutes = minutes.divmod(60)
+  "#{hours}h #{minutes}m #{seconds}s"
+end
+
+def table_widths(headers, rows)
+  headers.each_index.map { |index| ([headers[index]] + rows.map { |row| row[index] }).map(&:length).max }
+end
+
+def border(left, middle, right, widths)
+  left + widths.map { |width| "─" * (width + 2) }.join(middle) + right
+end
+
+def table_row(values, widths)
+  cells = values.each_with_index.map do |value, index|
+    text = index.zero? ? value.ljust(widths[index]) : value.rjust(widths[index])
+    " #{text} "
+  end
+  "│" + cells.join("│") + "│"
+end
+
+def print_table(headers, rows)
+  widths = table_widths(headers, rows)
+  puts border("┌", "┬", "┐", widths)
+  puts table_row(headers, widths)
+  puts border("├", "┼", "┤", widths)
+  rows.each { |row| puts table_row(row, widths) }
+  puts border("└", "┴", "┘", widths)
+end
+
+def usage_row(model, usage)
+  uncached_input = [usage.fetch("input_tokens") - usage.fetch("cached_input_tokens"), 0].max
+  [
+    model,
+    comma(usage.fetch("events")),
+    comma(uncached_input),
+    comma(usage.fetch("cached_input_tokens")),
+    comma(usage.fetch("output_tokens")),
+    comma(usage.fetch("reasoning_output_tokens")),
+    comma(usage.fetch("total_tokens"))
+  ]
+end
+
+def session_id(path)
+  File.basename(path, ".jsonl").split("-").last(5).join("-")
+end
+
+def session_files
+  active = Dir.glob(File.join(CODEX_ROOT, "sessions", "*", "*", "*", "*.jsonl"))
+  archived = Dir.glob(File.join(CODEX_ROOT, "archived_sessions", "*.jsonl"))
+  files_by_id = {}
+  (archived + active).uniq.sort.each { |path| files_by_id[session_id(path)] = path }
+  files_by_id.values.sort
+end
+
+def model_from(event)
+  model = event.dig("payload", "model") || event.dig("payload", "collaboration_mode", "settings", "model")
+  model.to_s.empty? ? "unknown" : model
+end
+
+def each_jsonl_line(file)
+  buffer = +""
+  skipping_large_line = false
+
+  File.open(file, "rb") do |io|
+    until io.eof?
+      io.readpartial(1024 * 1024).each_line do |part|
+        if skipping_large_line
+          skipping_large_line = false if part.end_with?("\n")
+          next
+        end
+
+        buffer << part
+        if buffer.bytesize > MAX_JSONL_LINE_BYTES
+          skipping_large_line = !buffer.end_with?("\n")
+          buffer.clear
+          next
+        end
+
+        next unless buffer.end_with?("\n")
+
+        yield buffer
+        buffer = +""
+      end
+    end
+  end
+
+  yield buffer unless skipping_large_line || buffer.empty?
+rescue EOFError
+end
+
+def collect_session_usage(day)
+  totals = Hash.new { |hash, key| hash[key] = blank_usage }
+  files = session_files
+
+  files.each do |file|
+    current_model = "unknown"
+    previous = nil
+
+    each_jsonl_line(file) do |line|
+      event = JSON.parse(line)
+      if event["type"] == "turn_context"
+        current_model = model_from(event)
+        next
+      end
+
+      next unless event.dig("payload", "type") == "token_count"
+      current, delta = event_usage(event.dig("payload", "info"), previous)
+      previous = current
+
+      next unless local_date(event["timestamp"]) == day
+      next unless positive_usage?(delta)
+
+      add_usage(totals[current_model], delta)
+    rescue JSON::ParserError
+      next
+    end
+  end
+
+  [files, totals]
+end
+
+def self_test
+  first = normalize_json_usage("input_tokens" => 10, "total_tokens" => 12)
+  second = normalize_json_usage("input_tokens" => 13, "output_tokens" => 2, "total_tokens" => 17)
+  abort "self-test failed: delta" unless usage_delta(second, first).fetch("total_tokens") == 5
+  _, direct = event_usage({ "total_token_usage" => second, "last_token_usage" => second }, first)
+  abort "self-test failed: last usage" unless direct.fetch("total_tokens") == 17
+  _, duplicate = event_usage({ "total_token_usage" => second, "last_token_usage" => second }, second)
+  abort "self-test failed: duplicate" if positive_usage?(duplicate)
+  abort "self-test failed: duration ms" unless human_duration(0.123) == "123ms"
+  abort "self-test failed: duration minutes" unless human_duration(65.2) == "1m 5s"
+
+  total = blank_usage
+  add_usage(total, second)
+  abort "self-test failed: total" unless total.fetch("total_tokens") == 17 && total.fetch("events") == 1
+
+  merged = blank_usage
+  merge_usage(merged, total)
+  abort "self-test failed: merge" unless merged.fetch("total_tokens") == 17
+  row = usage_row("test", blank_usage.merge("events" => 1, "input_tokens" => 100, "cached_input_tokens" => 40))
+  abort "self-test failed: uncached input" unless row.fetch(2) == "60"
+
+  event = { "payload" => { "model" => "gpt-test" } }
+  abort "self-test failed: model" unless model_from(event) == "gpt-test"
+end
+
+if ARGV.delete("--self-test")
+  self_test
+  exit
+end
+
+day = nil
+until ARGV.empty?
+  arg = ARGV.shift
+  if arg.start_with?("-")
+    usage
+    exit 2
+  end
+  day.nil? or (usage; exit 2)
+  day = arg
+end
+
+day = parse_day(day)
+session_files, totals = collect_session_usage(day)
+
+puts "Date: #{day}"
+puts "Codex session files scanned: #{session_files.length}"
+
+if totals.empty?
+  puts "Token usage events: 0"
+  puts
+  puts "No token counters were found in Codex JSONL session logs for this day."
+  puts "Completed in #{human_duration(Process.clock_gettime(Process::CLOCK_MONOTONIC) - started_at)}"
+  exit
+end
+
+grand_total = blank_usage
+rows = totals.sort_by { |model, usage| [-usage.fetch("total_tokens"), model] }.map do |model, usage|
+  merge_usage(grand_total, usage)
+  usage_row(model, usage)
+end
+rows << usage_row("TOTAL", grand_total) if rows.length > 1
+
+puts "Token usage events: #{comma(grand_total.fetch("events"))}"
+puts
+print_table(
+  ["Model", "Events", "Uncached input", "Cached input", "Output", "Reasoning output", "Total"],
+  rows
+)
+puts
+puts "Completed in #{human_duration(Process.clock_gettime(Process::CLOCK_MONOTONIC) - started_at)}"

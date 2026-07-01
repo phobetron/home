@@ -1,0 +1,271 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require "bigdecimal"
+require "date"
+require "json"
+require "open3"
+
+REGION_CODES = %w[
+  AFS1 APE1 APE2 APN1 APN2 APN3 APS1 APS2 APS3 APS4 APS5 APS6
+  CAC1 CAN1 CAN2 CNN1 CNN2 EU EUC1 EUC2 EUN1 EUS1 EUS2 EUW1 EUW2 EUW3
+  ILC1 MEC1 MES1 MXC1 SAE1 UGE1 UGW1 USE1 USE2 USW1 USW2
+].freeze
+REGION_CODE = Regexp.union(REGION_CODES)
+AWS_REGION_NAME = /\A(?:af|ap|ca|cn|eu|il|me|mx|sa|us)-[a-z-]+-\d-/
+started_at = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+
+def usage
+  warn "Usage: #{$PROGRAM_NAME} [YYYY-MM-DD] [--search TEXT] [--profile PROFILE] [--region REGION]"
+end
+
+def without_region(value)
+  value
+    .sub(AWS_REGION_NAME, "")
+    .sub(/\A#{REGION_CODE}[-_]/, "")
+    .sub(/:#{REGION_CODE}[-_]/, ":")
+end
+
+def decimal(value, places = nil)
+  text = (places ? value.round(places) : value).to_s("F")
+  text.sub(/(\.\d*?)0+\z/, "\\1").sub(/\.\z/, "")
+end
+
+def human_duration(seconds)
+  return "#{(seconds * 1000).round}ms" if seconds < 1
+  return "#{seconds.round(1).to_s.sub(/\.0\z/, "")}s" if seconds < 60
+
+  minutes, seconds = seconds.round.divmod(60)
+  return "#{minutes}m #{seconds}s" if minutes < 60
+
+  hours, minutes = minutes.divmod(60)
+  "#{hours}h #{minutes}m #{seconds}s"
+end
+
+def readable_usage_type(value)
+  text = value
+         .sub(/\AMP:/, "")
+         .sub(/-Units\z/, "")
+         .tr("_", " ")
+         .gsub(/([a-z])([A-Z])/, "\\1 \\2")
+         .gsub(/([A-Za-z])(\d)/, "\\1 \\2")
+         .gsub(/\bToken Count\b/i, "tokens")
+         .downcase
+  text[0] = text[0].upcase if text[0]
+  text
+end
+
+def table_inner_width(widths)
+  widths.sum + (widths.length * 2) + (widths.length - 1)
+end
+
+def table_widths(headers, tables)
+  widths = headers.each_index.map do |index|
+    ([headers[index]] + tables.flat_map { |_, rows| rows.map { |row| row[index] } }).map(&:length).max
+  end
+
+  service_width = tables.map { |service, _| service.length }.max || 0
+  short_by = service_width - (table_inner_width(widths) - 2)
+  widths[0] += short_by if short_by.positive?
+  widths
+end
+
+def border(left, middle, right, widths)
+  left + widths.map { |width| "─" * (width + 2) }.join(middle) + right
+end
+
+def full_border(left, right, widths)
+  left + ("─" * table_inner_width(widths)) + right
+end
+
+def table_row(values, widths)
+  cells = values.each_with_index.map do |value, index|
+    text = index.zero? ? value.ljust(widths[index]) : value.rjust(widths[index])
+    " #{text} "
+  end
+  "│" + cells.join("│") + "│"
+end
+
+def service_row(service, widths)
+  inner = table_inner_width(widths)
+  "│ #{service.ljust(inner - 2)} │"
+end
+
+def print_table(service, headers, rows, widths)
+  puts full_border("┌", "┐", widths)
+  puts service_row(service, widths)
+  puts border("├", "┬", "┤", widths)
+  puts table_row(headers, widths)
+  puts border("├", "┼", "┤", widths)
+  rows.each do |row|
+    puts border("├", "┼", "┤", widths) if row.first == "TOTAL"
+    puts table_row(row, widths)
+  end
+  puts border("└", "┴", "┘", widths)
+end
+
+def aws_ce(profile, region, *args)
+  command = ["aws"]
+  command += ["--profile", profile] if profile
+  command += ["--region", region] if region
+  command += ["ce", *args, "--output", "json"]
+
+  stdout, stderr, status = Open3.capture3(*command)
+  unless status.success?
+    warn stderr
+    exit status.exitstatus
+  end
+  JSON.parse(stdout)
+rescue Errno::ENOENT
+  abort "aws CLI not found"
+end
+
+def add_rows(totals, rows)
+  rows.each do |row|
+    key = [without_region(row.fetch(:service)), without_region(row.fetch(:usage_type))]
+    totals[key][:usage] += row.fetch(:usage)
+    totals[key][:cost] += row.fetch(:cost)
+  end
+end
+
+def service_rows(service, totals)
+  keys = totals.keys.select { |key| key.fetch(0) == service }
+  rows = keys
+         .sort_by { |key| readable_usage_type(key.fetch(1)) }
+         .map do |key|
+           usage = totals[key][:usage]
+           cost = totals[key][:cost]
+           [
+             readable_usage_type(key.fetch(1)),
+             decimal(usage),
+             decimal(cost),
+             usage.zero? ? "" : decimal(cost / usage)
+           ]
+         end
+
+  total_usage = keys.sum(BigDecimal("0")) { |key| totals[key][:usage] }
+  total_cost = keys.sum(BigDecimal("0")) { |key| totals[key][:cost] }
+  rows << ["TOTAL", decimal(total_usage), decimal(total_cost), total_usage.zero? ? "" : decimal(total_cost / total_usage, 3)] unless keys.empty?
+  rows
+end
+
+def self_test
+  abort "self-test failed: next day" unless (Date.iso8601("2026-06-30") + 1).to_s == "2026-07-01"
+  abort "self-test failed: MP region" unless without_region("MP:EUC1_InputTokenCount_Global-Units") == "MP:InputTokenCount_Global-Units"
+  abort "self-test failed: cached region" unless without_region("MP:USE1_cached_input_tokens_standard-Units") == "MP:cached_input_tokens_standard-Units"
+  abort "self-test failed: readable usage" unless readable_usage_type("MP:CacheWrite1hInputTokenCount_Global-Units") == "Cache write 1h input tokens global"
+  abort "self-test failed: table width" unless table_inner_width(table_widths(["A", "B"], [["long service", [["x", "y"]]]])) >= "long service".length + 2
+  abort "self-test failed: duration ms" unless human_duration(0.123) == "123ms"
+  abort "self-test failed: duration minutes" unless human_duration(65.2) == "1m 5s"
+
+  totals = Hash.new { |hash, key| hash[key] = { usage: BigDecimal("0"), cost: BigDecimal("0") } }
+  add_rows(totals, [
+    { service: "USE1-Claude", usage_type: "MP:EUC1_InputTokenCount_Global-Units", usage: BigDecimal("0.000841"), cost: BigDecimal("0.000841") },
+    { service: "EU-Claude", usage_type: "MP:EUN1_InputTokenCount_Global-Units", usage: BigDecimal("0.014445"), cost: BigDecimal("0.014445") },
+    { service: "USW2-Claude", usage_type: "MP:USE1_InputTokenCount_Global-Units", usage: BigDecimal("0.305244"), cost: BigDecimal("0.305244") }
+  ])
+  total = totals.fetch(["Claude", "MP:InputTokenCount_Global-Units"])
+  abort "self-test failed: aggregate" unless decimal(total[:usage]) == "0.32053" && decimal(total[:cost]) == "0.32053"
+
+  add_rows(totals, [
+    { service: "OpenAI GPT-5.5 (Amazon Bedrock Edition)", usage_type: "MP:USE1_input_tokens_standard-Units", usage: BigDecimal("2"), cost: BigDecimal("11") },
+    { service: "OpenAI GPT-5.5 (Amazon Bedrock Edition)", usage_type: "MP:USE2_cached_input_tokens_standard-Units", usage: BigDecimal("3"), cost: BigDecimal("1.65") }
+  ])
+  input = totals.fetch(["OpenAI GPT-5.5 (Amazon Bedrock Edition)", "MP:input_tokens_standard-Units"])
+  cached = totals.fetch(["OpenAI GPT-5.5 (Amazon Bedrock Edition)", "MP:cached_input_tokens_standard-Units"])
+  abort "self-test failed: openai input aggregate" unless decimal(input[:usage]) == "2" && decimal(input[:cost]) == "11"
+  abort "self-test failed: openai cached aggregate" unless decimal(cached[:usage]) == "3" && decimal(cached[:cost]) == "1.65"
+  total_row = service_rows("OpenAI GPT-5.5 (Amazon Bedrock Edition)", totals).last
+  abort "self-test failed: total row" unless total_row == ["TOTAL", "5", "12.65", "2.53"]
+
+  rounded_totals = Hash.new { |hash, key| hash[key] = { usage: BigDecimal("0"), cost: BigDecimal("0") } }
+  add_rows(rounded_totals, [
+    { service: "Rounded", usage_type: "MP:USE1_input_tokens_standard-Units", usage: BigDecimal("3"), cost: BigDecimal("1") }
+  ])
+  abort "self-test failed: rounded total" unless service_rows("Rounded", rounded_totals).last == ["TOTAL", "3", "1", "0.333"]
+end
+
+search = "Bedrock"
+day = nil
+profile = nil
+region = nil
+
+until ARGV.empty?
+  case (arg = ARGV.shift)
+  when "--search"
+    search = ARGV.shift or (usage; exit 2)
+  when "--profile"
+    profile = ARGV.shift or (usage; exit 2)
+  when "--region"
+    region = ARGV.shift or (usage; exit 2)
+  when "--self-test"
+    self_test
+    exit
+  when "-h", "--help"
+    usage
+    exit
+  when /\A-/
+    usage
+    exit 2
+  else
+    day.nil? or (usage; exit 2)
+    day = arg
+  end
+end
+
+day = day ? Date.iso8601(day) : Date.today - 1
+start_date = day.to_s
+end_date = (day + 1).to_s
+time_period = "Start=#{start_date},End=#{end_date}"
+
+services = aws_ce(
+  profile,
+  region,
+  "get-dimension-values",
+  "--time-period", time_period,
+  "--dimension", "SERVICE",
+  "--search", search
+).fetch("DimensionValues", []).map { |item| item.fetch("Value") }
+
+totals = Hash.new { |hash, key| hash[key] = { usage: BigDecimal("0"), cost: BigDecimal("0") } }
+
+services.each do |service|
+  filter = JSON.generate({ Dimensions: { Key: "SERVICE", Values: [service] } })
+  result = aws_ce(
+    profile,
+    region,
+    "get-cost-and-usage",
+    "--time-period", time_period,
+    "--granularity", "DAILY",
+    "--metrics", "UsageQuantity", "UnblendedCost",
+    "--filter", filter,
+    "--group-by", "Type=DIMENSION,Key=USAGE_TYPE"
+  )
+
+  result.fetch("ResultsByTime", []).each do |bucket|
+    add_rows(totals, bucket.fetch("Groups", []).map { |group|
+      metrics = group.fetch("Metrics")
+      {
+        service: service,
+        usage_type: group.fetch("Keys").fetch(0),
+        usage: BigDecimal(metrics.fetch("UsageQuantity").fetch("Amount")),
+        cost: BigDecimal(metrics.fetch("UnblendedCost").fetch("Amount"))
+      }
+    })
+  end
+end
+
+headers = ["Usage type", "Usage", "Cost", "Cost/unit"]
+tables = totals.keys.map(&:first).uniq.sort.map do |service|
+  [service, service_rows(service, totals)]
+end
+
+widths = table_widths(headers, tables)
+puts "Date: #{start_date}"
+tables.each do |service, rows|
+  puts
+  print_table(service, headers, rows, widths)
+end
+
+puts
+puts "Completed in #{human_duration(Process.clock_gettime(Process::CLOCK_MONOTONIC) - started_at)}"

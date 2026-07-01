@@ -1,0 +1,480 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require "bigdecimal"
+require "date"
+require "json"
+require "open3"
+require "time"
+
+CODEX_ROOT = File.expand_path("~/.codex")
+TOKEN_FIELDS = %w[input_tokens cached_input_tokens output_tokens reasoning_output_tokens total_tokens].freeze
+MAX_JSONL_LINE_BYTES = 10 * 1024 * 1024
+TOKEN_UNIT = BigDecimal("1000000")
+REGION_CODES = %w[
+  AFS1 APE1 APE2 APN1 APN2 APN3 APS1 APS2 APS3 APS4 APS5 APS6
+  CAC1 CAN1 CAN2 CNN1 CNN2 EU EUC1 EUC2 EUN1 EUS1 EUS2 EUW1 EUW2 EUW3
+  ILC1 MEC1 MES1 MXC1 SAE1 UGE1 UGW1 USE1 USE2 USW1 USW2
+].freeze
+REGION_CODE = Regexp.union(REGION_CODES)
+AWS_REGION_NAME = /\A(?:af|ap|ca|cn|eu|il|me|mx|sa|us)-[a-z-]+-\d-/
+
+started_at = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+
+def usage
+  warn "Usage: #{$PROGRAM_NAME} [YYYY-MM-DD] [--search TEXT] [--profile PROFILE] [--region REGION]"
+end
+
+def parse_day(value)
+  value ? Date.iso8601(value) : Date.today - 1
+rescue Date::Error
+  usage
+  exit 2
+end
+
+def blank_usage
+  TOKEN_FIELDS.to_h { |field| [field, 0] }.merge("events" => 0)
+end
+
+def add_usage(total, usage)
+  total["events"] += 1
+  TOKEN_FIELDS.each { |field| total[field] += usage.fetch(field, 0).to_i }
+end
+
+def normalize_json_usage(fields)
+  TOKEN_FIELDS.to_h { |field| [field, fields.fetch(field, 0).to_i] }
+end
+
+def usage_delta(current, previous)
+  return current if previous.nil?
+  return current if current.fetch("total_tokens") < previous.fetch("total_tokens", 0)
+
+  TOKEN_FIELDS.to_h { |field| [field, [current.fetch(field) - previous.fetch(field, 0), 0].max] }
+end
+
+def event_usage(info, previous_total)
+  total = normalize_json_usage((info || {}).fetch("total_token_usage", {}))
+  last = normalize_json_usage((info || {}).fetch("last_token_usage", {}))
+  usage = previous_total == total ? normalize_json_usage({}) : last
+  usage = usage_delta(total, previous_total) unless positive_usage?(usage)
+  [total, usage]
+end
+
+def positive_usage?(usage)
+  usage.fetch("total_tokens", 0).positive? || TOKEN_FIELDS.any? { |field| usage.fetch(field, 0).positive? }
+end
+
+def local_date(timestamp)
+  Time.iso8601(timestamp).getlocal.to_date
+rescue ArgumentError, TypeError
+  nil
+end
+
+def session_id(path)
+  File.basename(path, ".jsonl").split("-").last(5).join("-")
+end
+
+def session_files
+  active = Dir.glob(File.join(CODEX_ROOT, "sessions", "*", "*", "*", "*.jsonl"))
+  archived = Dir.glob(File.join(CODEX_ROOT, "archived_sessions", "*.jsonl"))
+  files_by_id = {}
+  (archived + active).uniq.sort.each { |path| files_by_id[session_id(path)] = path }
+  files_by_id.values.sort
+end
+
+def model_from(event)
+  model = event.dig("payload", "model") || event.dig("payload", "collaboration_mode", "settings", "model")
+  model.to_s.empty? ? "unknown" : model
+end
+
+def each_jsonl_line(file)
+  buffer = +""
+  skipping_large_line = false
+
+  File.open(file, "rb") do |io|
+    until io.eof?
+      io.readpartial(1024 * 1024).each_line do |part|
+        if skipping_large_line
+          skipping_large_line = false if part.end_with?("\n")
+          next
+        end
+
+        buffer << part
+        if buffer.bytesize > MAX_JSONL_LINE_BYTES
+          skipping_large_line = !buffer.end_with?("\n")
+          buffer.clear
+          next
+        end
+
+        next unless buffer.end_with?("\n")
+
+        yield buffer
+        buffer = +""
+      end
+    end
+  end
+
+  yield buffer unless skipping_large_line || buffer.empty?
+rescue EOFError
+end
+
+def collect_codex_usage(day)
+  totals = Hash.new { |hash, key| hash[key] = blank_usage }
+  files = session_files
+
+  files.each do |file|
+    current_model = "unknown"
+    previous = nil
+
+    each_jsonl_line(file) do |line|
+      event = JSON.parse(line)
+      if event["type"] == "turn_context"
+        current_model = model_from(event)
+        next
+      end
+
+      next unless event.dig("payload", "type") == "token_count"
+
+      current, delta = event_usage(event.dig("payload", "info"), previous)
+      previous = current
+
+      next unless local_date(event["timestamp"]) == day
+      next unless positive_usage?(delta)
+
+      add_usage(totals[current_model], delta)
+    rescue JSON::ParserError
+      next
+    end
+  end
+
+  [files, totals]
+end
+
+def without_region(value)
+  value
+    .sub(AWS_REGION_NAME, "")
+    .sub(/\A#{REGION_CODE}[-_]/, "")
+    .sub(/:#{REGION_CODE}[-_]/, ":")
+end
+
+def usage_category(usage_type)
+  text = without_region(usage_type).downcase
+  return :cached_input if text.include?("cacheread") || text.include?("cache_read") || text.include?("cached_input") || text.include?("input_tokens_cached")
+  return nil if text.include?("cachewrite") || text.include?("cache_write")
+  return :input if text.include?("inputtokencount") || text.include?("input_tokens")
+  return :output if text.include?("outputtokencount") || text.include?("output_tokens")
+
+  nil
+end
+
+def aws_ce(profile, region, *args)
+  command = ["aws"]
+  command += ["--profile", profile] if profile
+  command += ["--region", region] if region
+  command += ["ce", *args, "--output", "json"]
+
+  stdout, stderr, status = Open3.capture3(*command)
+  unless status.success?
+    warn stderr
+    exit status.exitstatus
+  end
+  JSON.parse(stdout)
+rescue Errno::ENOENT
+  abort "aws CLI not found"
+end
+
+def bedrock_services(profile, region, search, time_period)
+  aws_ce(
+    profile,
+    region,
+    "get-dimension-values",
+    "--time-period", time_period,
+    "--dimension", "SERVICE",
+    "--search", search
+  ).fetch("DimensionValues", []).map { |item| item.fetch("Value") }
+end
+
+def comparable(value)
+  value.downcase.gsub(/[^a-z0-9]+/, " ").strip
+end
+
+def bedrock_model_key(model)
+  comparable(model.sub(/\Aopenai\./, ""))
+end
+
+def matching_services(services, model)
+  key = bedrock_model_key(model)
+  services.select { |service| comparable(service).include?("openai") && comparable(service).include?(key) }
+end
+
+def add_rate_rows(totals, groups)
+  groups.each do |group|
+    category = usage_category(group.fetch("Keys").fetch(0))
+    next unless category
+
+    metrics = group.fetch("Metrics")
+    totals[category][:usage] += BigDecimal(metrics.fetch("UsageQuantity").fetch("Amount"))
+    totals[category][:cost] += BigDecimal(metrics.fetch("UnblendedCost").fetch("Amount"))
+  end
+end
+
+def rates_for_services(profile, region, services, time_period)
+  totals = Hash.new { |hash, key| hash[key] = { usage: BigDecimal("0"), cost: BigDecimal("0") } }
+
+  services.each do |service|
+    filter = JSON.generate({ Dimensions: { Key: "SERVICE", Values: [service] } })
+    result = aws_ce(
+      profile,
+      region,
+      "get-cost-and-usage",
+      "--time-period", time_period,
+      "--granularity", "DAILY",
+      "--metrics", "UsageQuantity", "UnblendedCost",
+      "--filter", filter,
+      "--group-by", "Type=DIMENSION,Key=USAGE_TYPE"
+    )
+    result.fetch("ResultsByTime", []).each { |bucket| add_rate_rows(totals, bucket.fetch("Groups", [])) }
+  end
+
+  totals.transform_values { |value| value[:usage].zero? ? nil : value[:cost] / value[:usage] }.compact
+end
+
+def apply_cached_rate_fallback(model, rates)
+  return false if rates[:cached_input] || !rates[:input]
+  return false unless model.match?(/\Aopenai\.gpt-5\./)
+
+  rates[:cached_input] = rates[:input] * BigDecimal("0.1")
+  true
+end
+
+def units(tokens)
+  BigDecimal(tokens.to_s) / TOKEN_UNIT
+end
+
+def component_cost(tokens, rate)
+  return BigDecimal("0") if tokens.zero?
+  return nil unless rate
+
+  units(tokens) * rate
+end
+
+def estimate_cost(usage, rates)
+  cached_tokens = usage.fetch("cached_input_tokens")
+  input_tokens = [usage.fetch("input_tokens") - cached_tokens, 0].max
+  output_tokens = usage.fetch("output_tokens")
+
+  input_cost = component_cost(input_tokens, rates[:input])
+  output_cost = component_cost(output_tokens, rates[:output])
+  cached_cost = component_cost(cached_tokens, rates[:cached_input])
+  cached_cost = BigDecimal("0") if cached_tokens.zero?
+
+  base_cost = input_cost && output_cost ? input_cost + output_cost : nil
+  low_cost = base_cost && cached_cost ? base_cost + cached_cost : base_cost
+  high_cached_cost = cached_cost || component_cost(cached_tokens, rates[:input])
+  high_cost = base_cost && high_cached_cost ? base_cost + high_cached_cost : nil
+  exact = !low_cost.nil? && low_cost == high_cost
+
+  {
+    input_units: units(input_tokens),
+    cached_units: units(cached_tokens),
+    output_units: units(output_tokens),
+    input_rate: rates[:input],
+    cached_rate: rates[:cached_input],
+    output_rate: rates[:output],
+    input_cost: input_cost,
+    cached_cost: cached_cost,
+    output_cost: output_cost,
+    low_cost: low_cost,
+    high_cost: high_cost,
+    exact: exact
+  }
+end
+
+def decimal(value, places = nil)
+  return "" if value.nil?
+
+  text = (places ? value.round(places) : value).to_s("F")
+  text.sub(/(\.\d*?)0+\z/, "\\1").sub(/\.\z/, "")
+end
+
+def grouped(value, places = nil)
+  text = decimal(value, places)
+  whole, fraction = text.split(".", 2)
+  whole = whole.reverse.gsub(/(\d{3})(?=\d)/, "\\1,").reverse
+  fraction ? "#{whole}.#{fraction}" : whole
+end
+
+def money(value)
+  return "missing" if value.nil?
+
+  text = value.round(2).to_s("F")
+  whole, fraction = text.split(".", 2)
+  whole = whole.reverse.gsub(/(\d{3})(?=\d)/, "\\1,").reverse
+  "$#{whole}.#{(fraction || "").ljust(2, "0")}"
+end
+
+def money_range(low, high)
+  return "missing" if high.nil?
+  return money(high) if low == high
+  return "≤#{money(high)}" if low.nil?
+
+  "#{money(low)}-#{money(high)}"
+end
+
+def human_duration(seconds)
+  return "#{(seconds * 1000).round}ms" if seconds < 1
+  return "#{seconds.round(1).to_s.sub(/\.0\z/, "")}s" if seconds < 60
+
+  minutes, seconds = seconds.round.divmod(60)
+  return "#{minutes}m #{seconds}s" if minutes < 60
+
+  hours, minutes = minutes.divmod(60)
+  "#{hours}h #{minutes}m #{seconds}s"
+end
+
+def table_widths(headers, rows)
+  headers.each_index.map { |index| ([headers[index]] + rows.map { |row| row[index] }).map(&:length).max }
+end
+
+def border(left, middle, right, widths)
+  left + widths.map { |width| "─" * (width + 2) }.join(middle) + right
+end
+
+def table_row(values, widths)
+  cells = values.each_with_index.map do |value, index|
+    text = index.zero? ? value.ljust(widths[index]) : value.rjust(widths[index])
+    " #{text} "
+  end
+  "│" + cells.join("│") + "│"
+end
+
+def print_table(headers, rows)
+  widths = table_widths(headers, rows)
+  puts border("┌", "┬", "┐", widths)
+  puts table_row(headers, widths)
+  puts border("├", "┼", "┤", widths)
+  rows.each { |row| puts table_row(row, widths) }
+  puts border("└", "┴", "┘", widths)
+end
+
+def estimate_row(model, usage, estimate)
+  [
+    model,
+    usage.fetch("events").to_s.reverse.gsub(/(\d{3})(?=\d)/, "\\1,").reverse,
+    grouped(estimate.fetch(:input_units), 3),
+    grouped(estimate.fetch(:cached_units), 3),
+    grouped(estimate.fetch(:output_units), 3),
+    decimal(estimate.fetch(:input_rate), 4),
+    estimate.fetch(:cached_units).zero? ? "" : (estimate.fetch(:cached_rate) ? decimal(estimate.fetch(:cached_rate), 4) : "missing"),
+    decimal(estimate.fetch(:output_rate), 4),
+    money_range(estimate.fetch(:low_cost), estimate.fetch(:high_cost))
+  ]
+end
+
+def self_test
+  abort "self-test failed: category input" unless usage_category("MP:USE1_input_tokens_standard-Units") == :input
+  abort "self-test failed: category cache" unless usage_category("MP:EUC1_CacheReadInputTokenCount_Global-Units") == :cached_input
+  abort "self-test failed: category cached input" unless usage_category("MP:USE1_cached_input_tokens_standard-Units") == :cached_input
+  abort "self-test failed: category input tokens cached" unless usage_category("MP:USE1_input_tokens_cached_standard-Units") == :cached_input
+  abort "self-test failed: category cache write" unless usage_category("MP:USE1_CacheWriteInputTokenCount-Units").nil?
+  abort "self-test failed: model key" unless bedrock_model_key("openai.gpt-5.5") == "gpt 5 5"
+
+  usage = blank_usage.merge("events" => 1, "input_tokens" => 2_000_000, "cached_input_tokens" => 1_000_000, "output_tokens" => 500_000, "total_tokens" => 2_500_000)
+  rates = { input: BigDecimal("5.5"), output: BigDecimal("33") }
+  abort "self-test failed: cached fallback" unless apply_cached_rate_fallback("openai.gpt-5.5", rates)
+  abort "self-test failed: cached fallback rate" unless decimal(rates.fetch(:cached_input)) == "0.55"
+  estimate = estimate_cost(usage, rates)
+  abort "self-test failed: estimate" unless decimal(estimate.fetch(:high_cost)) == "22.55"
+
+  _, direct = event_usage({ "total_token_usage" => usage, "last_token_usage" => usage }, nil)
+  abort "self-test failed: last usage" unless direct.fetch("total_tokens") == usage.fetch("total_tokens")
+  _, duplicate = event_usage({ "total_token_usage" => usage, "last_token_usage" => usage }, normalize_json_usage(usage))
+  abort "self-test failed: duplicate" if positive_usage?(duplicate)
+end
+
+search = "Bedrock"
+day = nil
+profile = nil
+region = nil
+
+until ARGV.empty?
+  case (arg = ARGV.shift)
+  when "--search"
+    search = ARGV.shift or (usage; exit 2)
+  when "--profile"
+    profile = ARGV.shift or (usage; exit 2)
+  when "--region"
+    region = ARGV.shift or (usage; exit 2)
+  when "--self-test"
+    self_test
+    exit
+  when "-h", "--help"
+    usage
+    exit
+  when /\A-/
+    usage
+    exit 2
+  else
+    day.nil? or (usage; exit 2)
+    day = arg
+  end
+end
+
+day = parse_day(day)
+time_period = "Start=#{day},End=#{day + 1}"
+session_files, codex_usage = collect_codex_usage(day)
+bedrock_usage = codex_usage.select { |model, _| model.start_with?("openai.") }
+
+puts "Date: #{day}"
+puts "Codex session files scanned: #{session_files.length}"
+
+if bedrock_usage.empty?
+  puts "Bedrock model token usage events: 0"
+  exit
+end
+
+services = bedrock_services(profile, region, search, time_period)
+rows = []
+low_estimated = BigDecimal("0")
+high_estimated = BigDecimal("0")
+missing_models = []
+range_models = []
+fallback_models = []
+
+bedrock_usage.sort.each do |model, model_usage|
+  matched_services = matching_services(services, model)
+  rates = rates_for_services(profile, region, matched_services, time_period)
+  fallback_models << model if apply_cached_rate_fallback(model, rates)
+  estimate = estimate_cost(model_usage, rates)
+  if estimate.fetch(:high_cost)
+    high_estimated += estimate.fetch(:high_cost)
+    low_estimated += estimate.fetch(:low_cost) || estimate.fetch(:high_cost)
+    range_models << model unless estimate.fetch(:exact)
+  else
+    missing_models << model
+  end
+  rows << estimate_row(model, model_usage, estimate)
+end
+
+puts "Bedrock model token usage events: #{bedrock_usage.values.sum { |item| item.fetch("events") }}"
+puts "Matched Bedrock services: #{bedrock_usage.keys.sum { |model| matching_services(services, model).length }}"
+puts "Token unit: 1,000,000 tokens"
+puts
+print_table(
+  ["Model", "Events", "Uncached M", "Cached M", "Output M", "Input $/M", "Cached $/M", "Output $/M", "Estimated cost"],
+  rows
+)
+puts
+if missing_models.empty? && range_models.empty?
+  puts "Estimated total: #{money(high_estimated)}"
+elsif missing_models.empty?
+  puts "Estimated total: #{money_range(low_estimated, high_estimated)}"
+else
+  puts "Estimated total: #{money_range(low_estimated, high_estimated)} known; missing rates for #{missing_models.join(", ")}"
+end
+if fallback_models.empty?
+  puts "Cached input is priced only when Cost Explorer has a cache-read row; otherwise the estimate is a range up to full input price."
+else
+  puts "Cached input uses Cost Explorer cache-read rates when present, or 10% of input price for #{fallback_models.join(", ")}."
+end
+puts "Completed in #{human_duration(Process.clock_gettime(Process::CLOCK_MONOTONIC) - started_at)}"
