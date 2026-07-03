@@ -31,6 +31,31 @@ def decimal(value, places = nil)
   text.sub(/(\.\d*?)0+\z/, "\\1").sub(/\.\z/, "")
 end
 
+def comma(value)
+  value.to_s.reverse.gsub(/(\d{3})(?=\d)/, "\\1,").reverse
+end
+
+def grouped_decimal(value, places = nil)
+  whole, fraction = decimal(value, places).split(".", 2)
+  whole = comma(whole)
+  fraction ? "#{whole}.#{fraction}" : whole
+end
+
+def units(value)
+  grouped_decimal(value, 3)
+end
+
+def fixed_decimal(value, places)
+  text = value.round(places).to_s("F")
+  whole, fraction = text.split(".", 2)
+  "#{whole}.#{(fraction || "").ljust(places, "0")}"
+end
+
+def currency(value)
+  whole, fraction = fixed_decimal(value, 2).split(".", 2)
+  "$#{comma(whole)}.#{fraction}"
+end
+
 def human_duration(seconds)
   return "#{(seconds * 1000).round}ms" if seconds < 1
   return "#{seconds.round(1).to_s.sub(/\.0\z/, "")}s" if seconds < 60
@@ -137,15 +162,15 @@ def service_rows(service, totals)
            cost = totals[key][:cost]
            [
              readable_usage_type(key.fetch(1)),
-             decimal(usage),
-             decimal(cost),
-             usage.zero? ? "" : decimal(cost / usage)
+             units(usage),
+             currency(cost),
+             usage.zero? ? "" : currency(cost / usage)
            ]
          end
 
   total_usage = keys.sum(BigDecimal("0")) { |key| totals[key][:usage] }
   total_cost = keys.sum(BigDecimal("0")) { |key| totals[key][:cost] }
-  rows << ["TOTAL", decimal(total_usage), decimal(total_cost), total_usage.zero? ? "" : decimal(total_cost / total_usage, 3)] unless keys.empty?
+  rows << ["TOTAL", units(total_usage), currency(total_cost), total_usage.zero? ? "" : currency(total_cost / total_usage)] unless keys.empty?
   rows
 end
 
@@ -154,6 +179,8 @@ def self_test
   abort "self-test failed: MP region" unless without_region("MP:EUC1_InputTokenCount_Global-Units") == "MP:InputTokenCount_Global-Units"
   abort "self-test failed: cached region" unless without_region("MP:USE1_cached_input_tokens_standard-Units") == "MP:cached_input_tokens_standard-Units"
   abort "self-test failed: readable usage" unless readable_usage_type("MP:CacheWrite1hInputTokenCount_Global-Units") == "Cache write 1h input tokens global"
+  abort "self-test failed: units" unless units(BigDecimal("1.2345")) == "1.235" && units(BigDecimal("1.2")) == "1.2"
+  abort "self-test failed: currency" unless currency(BigDecimal("1234.5")) == "$1,234.50"
   abort "self-test failed: table width" unless table_inner_width(table_widths(["A", "B"], [["long service", [["x", "y"]]]])) >= "long service".length + 2
   abort "self-test failed: duration ms" unless human_duration(0.123) == "123ms"
   abort "self-test failed: duration minutes" unless human_duration(65.2) == "1m 5s"
@@ -176,13 +203,13 @@ def self_test
   abort "self-test failed: openai input aggregate" unless decimal(input[:usage]) == "2" && decimal(input[:cost]) == "11"
   abort "self-test failed: openai cached aggregate" unless decimal(cached[:usage]) == "3" && decimal(cached[:cost]) == "1.65"
   total_row = service_rows("OpenAI GPT-5.5 (Amazon Bedrock Edition)", totals).last
-  abort "self-test failed: total row" unless total_row == ["TOTAL", "5", "12.65", "2.53"]
+  abort "self-test failed: total row" unless total_row == ["TOTAL", "5", "$12.65", "$2.53"]
 
   rounded_totals = Hash.new { |hash, key| hash[key] = { usage: BigDecimal("0"), cost: BigDecimal("0") } }
   add_rows(rounded_totals, [
     { service: "Rounded", usage_type: "MP:USE1_input_tokens_standard-Units", usage: BigDecimal("3"), cost: BigDecimal("1") }
   ])
-  abort "self-test failed: rounded total" unless service_rows("Rounded", rounded_totals).last == ["TOTAL", "3", "1", "0.333"]
+  abort "self-test failed: rounded total" unless service_rows("Rounded", rounded_totals).last == ["TOTAL", "3", "$1.00", "$0.33"]
 end
 
 search = "Bedrock"
