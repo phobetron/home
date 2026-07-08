@@ -279,3 +279,9 @@ withOptimizationLocale
 setLocale
 experienceOptions
 insightsOptions
+cda
+nextjs
+wildcard
+esr
+Commitlint
+prerelease
