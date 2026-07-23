@@ -1,0 +1,13 @@
+export EDITOR="$HOME/nvim.appimage"
+
+case ":$PATH:" in
+  *":$HOME/.yarn/bin:"*) ;;
+  *) export PATH="$HOME/.yarn/bin:$PATH" ;;
+esac
+
+case ":$PATH:" in
+  *":$HOME/.config/yarn/global/node_modules/.bin:"*) ;;
+  *) export PATH="$HOME/.config/yarn/global/node_modules/.bin:$PATH" ;;
+esac
+
+export NVM_DIR="$HOME/.nvm"
