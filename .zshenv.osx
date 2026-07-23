@@ -1,0 +1,103 @@
+export NVM_SYMLINK_CURRENT=true
+export NVM_DIR="$HOME/.nvm"
+case ":$PATH:" in
+  *":$NVM_DIR/current/bin:"*) ;;
+  *) export PATH="$NVM_DIR/current/bin:$PATH" ;;
+esac
+
+export PNPM_HOME="$HOME/Library/pnpm"
+case ":$PATH:" in
+  *":$PNPM_HOME:"*) ;;
+  *) export PATH="$PNPM_HOME:$PATH" ;;
+esac
+
+case ":$PATH:" in
+  *":/opt/homebrew/opt/curl/bin:"*) ;;
+  *) export PATH="/opt/homebrew/opt/curl/bin:$PATH" ;;
+esac
+
+case ":$PATH:" in
+  *":/usr/local/bin:"*) ;;
+  *) export PATH="/usr/local/bin:$PATH" ;;
+esac
+
+case ":$PATH:" in
+  *":/usr/local/sbin:"*) ;;
+  *) export PATH="/usr/local/sbin:$PATH" ;;
+esac
+
+case ":$PATH:" in
+  *":/usr/local/opt/python/libexec/bin:"*) ;;
+  *) export PATH="/usr/local/opt/python/libexec/bin:$PATH" ;;
+esac
+
+case ":$PATH:" in
+  *":/opt/homebrew/bin:"*) ;;
+  *) export PATH="/opt/homebrew/bin:$PATH" ;;
+esac
+
+case ":$PATH:" in
+  *":$HOME/.rbenv/bin:"*) ;;
+  *) export PATH="$HOME/.rbenv/bin:$PATH" ;;
+esac
+
+case ":$PATH:" in
+  *":$HOME/.local/bin:"*) ;;
+  *) export PATH="$HOME/.local/bin:$PATH" ;;
+esac
+
+case ":$PATH:" in
+  *":$HOME/.yarn/bin:"*) ;;
+  *) export PATH="$HOME/.yarn/bin:$PATH" ;;
+esac
+
+case ":$PATH:" in
+  *":$HOME/.config/yarn/global/node_modules/.bin:"*) ;;
+  *) export PATH="$HOME/.config/yarn/global/node_modules/.bin:$PATH" ;;
+esac
+
+case ":$PATH:" in
+  *":$HOME/.cache/rebar3/bin:"*) ;;
+  *) export PATH="$HOME/.cache/rebar3/bin:$PATH" ;;
+esac
+
+case ":$PATH:" in
+  *":$HOME/.juliaup/bin:"*) ;;
+  *) export PATH="$HOME/.juliaup/bin:$PATH" ;;
+esac
+
+export JAVA_HOME="/opt/homebrew/opt/openjdk@17"
+case ":$PATH:" in
+  *":$JAVA_HOME/bin:"*) ;;
+  *) export PATH="$JAVA_HOME/bin:$PATH" ;;
+esac
+
+export ANDROID_HOME="$HOME/Library/Android/sdk"
+export ANDROID_SDK_ROOT="$ANDROID_HOME"
+case ":$PATH:" in
+  *":$ANDROID_HOME/cmdline-tools/latest/bin:"*) ;;
+  *) export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$PATH" ;;
+esac
+
+case ":$PATH:" in
+  *":$ANDROID_HOME/platform-tools:"*) ;;
+  *) export PATH="$ANDROID_HOME/platform-tools:$PATH" ;;
+esac
+
+case ":$PATH:" in
+  *":$ANDROID_HOME/emulator:"*) ;;
+  *) export PATH="$ANDROID_HOME/emulator:$PATH" ;;
+esac
+
+case ":$PATH:" in
+  *":$HOME/.maestro/bin:"*) ;;
+  *) export PATH="$PATH:$HOME/.maestro/bin" ;;
+esac
+
+export CODEX_HOME="$HOME/.codex"
+
+if [[ -n "$CODEX_SHELL" ]]; then
+  export GIT_EDITOR="env TERM=xterm-256color nvim --clean -n"
+fi
+
+. "$HOME/.cargo/env"
